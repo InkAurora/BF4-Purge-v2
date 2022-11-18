@@ -3,6 +3,7 @@
 #include "Includes.hpp"
 
 bool isValidPtr(void* pointer) {
+  if (pointer == nullptr) return false;
   DWORD64 ptr = (DWORD64)pointer;
   return (ptr >= 0x10000 && ptr <= 0x0F000000000000);
 }
@@ -30,7 +31,7 @@ string ReadString(DWORD64 address, size_t size) {
   return string("");
 }
 
-vector<float> ReadVector(DWORD64 vectorAddress) {
+vector<float> ReadVector3(DWORD64 vectorAddress) {
   vector<float> vector3;
 
   float temp;
@@ -42,17 +43,26 @@ vector<float> ReadVector(DWORD64 vectorAddress) {
   return vector3;
 }
 
-vector<vector<float>> ReadMatrix(DWORD64 mAddress) {
-  vector<vector<float>> matrix(4, vector<float>(4));
+vector<float> ReadVector4(DWORD64 vectorAddress) {
+  vector<float> vector4;
+
+  float temp;
+  for (int i = 0; i < 4; i++) {
+	readBytes(vectorAddress + (i * 0x4), &temp, 4);
+	vector4.push_back(temp);
+  }
+
+  return vector4;
+}
+
+vector<vector<float>> ReadMatrix4x4(DWORD64 mAddress) {
+  vector<vector<float>> matrix;
 
   __int64 offset = 0;
   float temp;
   for (__int64 i = 0; i < 4; i++) {
-	for (__int64 j = 0; j < 4; j++) {
-	  readBytes(mAddress + offset, &temp, 4);
-	  matrix.at(i).at(j) = temp;
-	  offset += 0x4;
-	}
+	matrix.push_back(ReadVector4(mAddress + offset));
+	offset += 0x10;
   }
 
   return matrix;

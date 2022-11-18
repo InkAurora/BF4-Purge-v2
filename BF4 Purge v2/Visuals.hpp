@@ -1,8 +1,7 @@
 #pragma once
 
 #include "Includes.hpp"
-
-// https://github.com/CasualCoder91/ImGui-DX11
+#include "ESP.hpp"
 
 typedef long(__stdcall* present)(IDXGISwapChain*, UINT, UINT);
 present p_present;
@@ -62,8 +61,8 @@ LRESULT __stdcall WndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 }
 
 bool show_menu = true;
-bool show_canvas = false;
-float speed = 0.5;
+bool show_ESP = false;
+bool show_ESP_allies = true;
 
 string testText = "";
 
@@ -72,29 +71,46 @@ HWND window = NULL;
 ID3D11Device* p_device = NULL;
 ID3D11DeviceContext* p_context = NULL;
 ID3D11RenderTargetView* mainRenderTargetView = NULL;
+
+vector<entityESP> renderList;
+
+ImU32 SQUADALLY_ESP_COLOR = IM_COL32(100, 255, 100, 255);
+ImU32 ALLY_ESP_COLOR = IM_COL32(0, 100, 255, 255);
+ImU32 ENEMY_ESP_COLOR = IM_COL32(255, 100, 0, 255);
+
+int gmp(entityESP entity) {
+  return lround((entity.x + entity.headX) / 2);
+}
+
+vector<ImVec2> getRectPos(entityESP entity) {
+  int width = 300;
+  
+  ImVec2 p0, p1;
+
+  width = width * entity.scaleX;
+  p0 = ImVec2(gmp(entity) - (width / 2), entity.headY - ((entity.y - entity.headY) / 10));
+  p1 = ImVec2(gmp(entity) + (width / 2), entity.y + ((entity.y - entity.headY) / 10));
+
+  return { p0, p1 };
+}
+
 static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_interval, UINT flags) {
   if (!init) {
 	if (SUCCEEDED(p_swap_chain->GetDevice(__uuidof(ID3D11Device), (void**)&p_device))) {
 	  p_device->GetImmediateContext(&p_context);
 
-	  // Get HWND to the current window of the target/game
 	  DXGI_SWAP_CHAIN_DESC sd;
 	  p_swap_chain->GetDesc(&sd);
 	  window = sd.OutputWindow;
 
-	  // Location in memory where imgui is rendered to
 	  ID3D11Texture2D* pBackBuffer;
 	  p_swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
-	  // create a render target pointing to the back buffer
 	  p_device->CreateRenderTargetView(pBackBuffer, NULL, &mainRenderTargetView);
-	  // This does not destroy the back buffer! It only releases the pBackBuffer object which we only needed to create the RTV.
 	  pBackBuffer->Release();
 	  oWndProc = (WNDPROC)SetWindowLongPtr(window, GWLP_WNDPROC, (LONG_PTR)WndProc);
 
-	  // Init ImGui 
 	  ImGui::CreateContext();
 	  ImGuiIO& io = ImGui::GetIO();
-	  //io.ConfigFlags = ImGuiConfigFlags_NoMouseCursorChange;
 	  ImGui_ImplWin32_Init(window);
 	  ImGui_ImplDX11_Init(p_device, p_context);
 	  init = true;
@@ -102,24 +118,23 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 	else
 	  return p_present(p_swap_chain, sync_interval, flags);
   }
+
   ImGui_ImplDX11_NewFrame();
   ImGui_ImplWin32_NewFrame();
 
   ImGui::NewFrame();
 
-  //ImGui::ShowDemoWindow(); // check demo cpp
-
   if (show_menu) {
 	ImGui::Begin("BF4 Purge v2", &show_menu);
 	ImGui::SetWindowSize(ImVec2(200, 500), ImGuiCond_Always);
 	ImGui::Text("Options:");
-	ImGui::Checkbox("Canvas", &show_canvas);
-	ImGui::SliderFloat("Speed", &speed, 0.01, 1);
+	ImGui::Checkbox("Enable ESP", &show_ESP);
+	ImGui::Checkbox("ESP Allies", &show_ESP_allies);
 	ImGui::Text(testText.c_str());
 	ImGui::End();
   }
 
-  if (show_canvas) {
+  if (show_ESP) {
 	ImGuiIO& io = ImGui::GetIO();
 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -130,30 +145,38 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 	ImGui::SetWindowPos(ImVec2(0, 0), ImGuiCond_Always);
 	ImGui::SetWindowSize(ImVec2(io.DisplaySize.x, io.DisplaySize.y), ImGuiCond_Always);
 
+	PopulateESP();
+
+	renderList = DrawList;
+
 	ImGuiWindow* window = ImGui::GetCurrentWindow();
 	ImDrawList* draw_list = window->DrawList;
-	ImVec2 p0 = ImVec2(50, 25);
-	ImVec2 p1 = ImVec2(200, 250);
-	draw_list->AddRectFilled(p0, p1, IM_COL32(50, 50, 50, 255));
-	draw_list->AddRect(p0, p1, IM_COL32(255, 255, 255, 255));
 
-	ImVec2 midpoint = ImVec2(500, 500);
-	draw_list->AddCircle(midpoint, 30, ImColor(51, 255, 0), 0, 20);
+	for (entityESP entity : renderList) {
+	  if (!show_ESP_allies and !entity.isEnemy) continue;
+	  vector<ImVec2> rectPos = getRectPos(entity);
+	  if (entity.isEnemy) draw_list->AddRect(rectPos[0], rectPos[1], ENEMY_ESP_COLOR);
+	  else if (entity.isSquadAlly) draw_list->AddRect(rectPos[0], rectPos[1], SQUADALLY_ESP_COLOR);
+	  else draw_list->AddRect(rectPos[0], rectPos[1], ALLY_ESP_COLOR);
+
+	  string distanceStr = to_string(lround(entity.distance)) + "m";
+	  draw_list->AddText(ImVec2(gmp(entity), rectPos[1].y + 5), 0xFFFFFFFF, distanceStr.c_str());
+
+	  string healthStr = "HP " + to_string(lround(entity.health));
+	  draw_list->AddText(ImVec2(gmp(entity), rectPos[0].y - 15), 0xFFFFFFFF, healthStr.c_str());
+	}
 
 	window->DrawList->PushClipRectFullScreen();
 	ImGui::End();
 	ImGui::PopStyleColor();
 	ImGui::PopStyleVar(2);
-
   }
 
   ImGui::EndFrame();
 
-  // Prepare the data for rendering so we can call GetDrawData()
   ImGui::Render();
 
   p_context->OMSetRenderTargets(1, &mainRenderTargetView, NULL);
-  // The real rendering
   ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
   return p_present(p_swap_chain, sync_interval, flags);

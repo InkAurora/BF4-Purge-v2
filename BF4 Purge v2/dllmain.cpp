@@ -21,7 +21,8 @@ void loadGameContext() {
   while (true) {
     cClientGameContext = (ClientGameContext*)*(DWORD*)(OFFSET_CLIENTGAMECONTEXT);
     cWeapon = (Weapon*)*(DWORD*)(OFFSET_WEAPON);
-    if (isValidPtr(&cClientGameContext) and isValidPtr(cWeapon)) return;
+    cGameRenderer = (GameRenderer*)*(DWORD*)(OFFSET_GAMERENDERER);
+    if (isValidPtr(&cClientGameContext) and isValidPtr(cWeapon) and isValidPtr(cGameRenderer)) return;
     Sleep(500);
   }
 }
@@ -44,7 +45,7 @@ void detach() {
 
 int WINAPI Main(HMODULE hModule) {
 
-  //Sleep(20000); // Wait for game initialization before hooking dx11 -- Uncomment before compiling release
+  //Sleep(30000); // Wait for game initialization before hooking dx11 -- Uncomment before compiling release
 
   if (!InitializeVisuals()) {
     threadRunningOK = false;
@@ -52,10 +53,11 @@ int WINAPI Main(HMODULE hModule) {
 
   loadGameContext();
 
+  Player* pPlayer;
+
   while (threadRunningOK) {
     Sleep(50);
-    /*Player* pPlayer = getPlayerPointer(0);
-    testText = to_string(pPlayer->pSoldier->pClientSoldier->Health);*/
+    testText = "abc";
 	if (GetAsyncKeyState(VK_INSERT) & 1) {
       show_menu = !show_menu;
 	  while (GetAsyncKeyState(VK_NUMPAD1) & 1) {}

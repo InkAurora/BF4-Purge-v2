@@ -174,8 +174,10 @@
     <ClInclude Include="..\Include\MinHook.h" />
     <ClInclude Include="Classes.hpp" />
     <ClInclude Include="Console.hpp" />
+    <ClInclude Include="ESP.hpp" />
     <ClInclude Include="Globals.hpp" />
     <ClInclude Include="Includes.hpp" />
+    <ClInclude Include="Math.hpp" />
     <ClInclude Include="MemAccess.hpp" />
     <ClInclude Include="Offsets.hpp" />
   </ItemGroup>

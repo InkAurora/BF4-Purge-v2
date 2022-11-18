@@ -4,9 +4,18 @@
 #include "Globals.hpp"
 #include "MemAccess.hpp"
 
-struct Vector3
-{
-  float x, y, z;
+struct Vector3 {
+  float x;
+  float y;
+  float z;
+};
+
+struct Vector4 {
+  float x, y, z, w;
+};
+
+struct matrix3x4_t {
+  Vector4 i, j, k, l;
 };
 
 class ClientGameContext;
@@ -24,6 +33,12 @@ class GunSway;
 class PlayerArray;
 class Player;
 class Vehicle;
+class WeaponModifier;
+class Silencer;
+class WeaponZeroing;
+class Modes;
+class Ragdoll;
+class BoneData;
 
 class ClientGameContext
 {
@@ -40,7 +55,7 @@ class PlayerManager
 public:
   char pad_0x0000[0x540]; //0x0000
   LocalPlayer* pLocalPlayer; //0x0540
-  PlayerArray* pPlayerArray[70]; //0x0548
+  PlayerArray* pPlayerArray; //0x0548
 
 }; //Size=0x0550
 
@@ -72,9 +87,12 @@ public:
   char pad_0x0498[0x40]; //0x0498
   float Yaw; //0x04D8 
   float Pitch; //0x04DC 
-  char pad_0x04E0[0x14]; //0x04E0
-  unsigned char SoldierChams; //0x04F4
-  char pad_0x04F5[0xBB]; //0x04F5
+  char pad_0x04E0[0x10]; //0x04E0
+  __int32 PoseType; //0x04F0
+  unsigned char SoldierChams; //0x04F4 
+  char pad_0x04F5[0x88]; //0x04F5
+  Ragdoll* pRagdoll; //0x0580 
+  char pad_0x0588[0x25]; //0x0588
   unsigned char IsSprinting; //0x05B0 
   unsigned char IsOccluded; //0x05B1 
 
@@ -127,8 +145,12 @@ public:
 class FiringFunction
 {
 public:
-  char pad_0x0000[0xB0]; //0x0000
-  BulletEntity* pBulletEntity; //0x00B0 
+  char pad_0x0000[0x60]; //0x0000
+  Vector3 Offset; //0x0060
+  char pad_0x006C[0x14]; //0x006C
+  Vector3 Velocity; //0x0080
+  char pad_0x008C[0x24]; //0x008C
+  BulletEntity* pBulletEntity; //0x00B0
   char pad_0x00B8[0x20]; //0x00B8
   __int32 BulletsPerShell; //0x00D8 
   __int32 BulletsPerShot; //0x00DC 
@@ -172,7 +194,7 @@ public:
 class PlayerArray
 {
 public:
-  Player* pPlayer; //0x0000 
+  Player* pPlayer; //0x0000
 
 }; //Size=0x0008
 
@@ -196,6 +218,20 @@ public:
 
 }; //Size=0x1846
 
+class Ragdoll
+{
+public:
+  char pad_0x0000[0xB0]; //0x0000
+  BoneData* pBoneData; //0x00B0 
+
+}; //Size=0x00B8
+
+class BoneData
+{
+public:
+
+}; //Size=0x0000
+
 class Vehicle
 {
 public:
@@ -203,18 +239,235 @@ public:
 
 }; //Size=0x0010
 
+class WeaponModifier
+{
+public:
+  char pad_0x0000[0x68]; //0x0000
+  Silencer* pSilencer; //0x0068 
+  char pad_0x0070[0x50]; //0x0070
+  WeaponZeroing* pWeaponZeroing; //0x00C0 
+
+}; //Size=0x00C8
+
+class Silencer
+{
+public:
+  char pad_0x0000[0x20]; //0x0000
+  Vector3 Velocity; //0x0020 
+
+}; //Size=0x002C
+
+class WeaponZeroing
+{
+public:
+  char pad_0x0000[0x18]; //0x0000
+  Modes* pModes; //0x0018 
+
+}; //Size=0x0020
+
+class Modes
+{
+public:
+  Vector3 Zeroing; //0x0000 
+
+}; //Size=0x000C
+
+
+
 ClientGameContext* cClientGameContext;
 Weapon* cWeapon;
 
-Player* getPlayerPointer(int index) {
+Player* getEntityPtr(int index) {
   if (isValidPtr(cClientGameContext)) {
     if (isValidPtr(cClientGameContext->pPlayerManager)) {
-      if (isValidPtr(cClientGameContext->pPlayerManager->pPlayerArray[index]))
-        if (isValidPtr(cClientGameContext->pPlayerManager->pPlayerArray[index]->pPlayer)) {
-          return cClientGameContext->pPlayerManager->pPlayerArray[index]->pPlayer;
+      PlayerArray* pPlayerArr = (PlayerArray*)cClientGameContext->pPlayerManager->pPlayerArray;
+      pPlayerArr += index;
+      if (isValidPtr(pPlayerArr))
+        if (isValidPtr(pPlayerArr->pPlayer)) {
+          return pPlayerArr->pPlayer;
         }
     }
   }
 
   return nullptr;
+}
+
+Player* getLocalPlayerPtr() {
+  if (isValidPtr(cClientGameContext)) {
+    if (isValidPtr(cClientGameContext->pPlayerManager)) {
+      PlayerArray* pLocalP = (PlayerArray*)cClientGameContext->pPlayerManager->pLocalPlayer;
+      if (isValidPtr(pLocalP))
+        if (isValidPtr(pLocalP->pPlayer)) {
+          return pLocalP->pPlayer;
+        }
+    }
+  }
+
+  return nullptr;
+}
+
+Vector3 getEntityPos(int index) {
+  Player* pPlayer = getEntityPtr(index);
+  if (isValidPtr(pPlayer)) {
+    if (isValidPtr(pPlayer->pSoldier)) {
+      if (isValidPtr(pPlayer->pSoldier->pPosition)) {
+        return pPlayer->pSoldier->pPosition->Coords;
+      }
+    }
+  }
+
+  return Vector3{ 0, 0, 0 };
+}
+
+Vector3 getEntityVel(int index) {
+  Player* pPlayer = getEntityPtr(index);
+  if (isValidPtr(pPlayer)) {
+    if (isValidPtr(pPlayer->pSoldier)) {
+      if (isValidPtr(pPlayer->pSoldier->pPosition)) {
+        return pPlayer->pSoldier->pPosition->Velocity;
+      }
+    }
+  }
+
+  return Vector3{ 0, 0, 0 };
+}
+
+float getEntityHealth(int index) {
+  Player* pPlayer = getEntityPtr(index);
+  if (isValidPtr(pPlayer)) {
+    if (isValidPtr(pPlayer->pSoldier)) {
+      if (isValidPtr(pPlayer->pSoldier->pClientSoldier)) {
+        return pPlayer->pSoldier->pClientSoldier->Health;
+      }
+    }
+  }
+
+  return 0.0;
+}
+
+string getEntityName(int index) {
+  Player* pPlayer = getEntityPtr(index);
+  if (isValidPtr(pPlayer)) return pPlayer->PlayerName;
+
+  return "";
+}
+
+bool isEnemy(int index) {
+  Player* pLocalPlayer = getLocalPlayerPtr();
+  Player* pPlayer = getEntityPtr(index);
+  if (isValidPtr(pLocalPlayer) and isValidPtr(pPlayer)) {
+    if (pLocalPlayer->TeamId == pPlayer->TeamId) return false;
+    return true;
+  }
+
+  return false;
+}
+
+bool isSquadAlly(int index) {
+  Player* pLocalPlayer = getLocalPlayerPtr();
+  Player* pPlayer = getEntityPtr(index);
+  if (isValidPtr(pLocalPlayer) and isValidPtr(pPlayer)) {
+    if (pLocalPlayer->TeamId == pPlayer->TeamId) {
+      if (pLocalPlayer->SquadId == pPlayer->SquadId) return true;
+    }
+    return false;
+  }
+
+  return false;
+}
+
+WeaponData* getWeaponData() {
+  if (isValidPtr(cWeapon)) {
+    if (isValidPtr(cWeapon->pWeaponData)) {
+      return cWeapon->pWeaponData;
+    }
+  }
+
+  return nullptr;
+}
+
+Vector3 getWeaponOffset() {
+  if (isValidPtr(cWeapon)) {
+    if (isValidPtr(cWeapon->pWeaponData)) {
+      if (isValidPtr(cWeapon->pWeaponData->pFiringFunction)) {
+        return cWeapon->pWeaponData->pFiringFunction->Offset;
+      }
+    }
+  }
+
+  return Vector3{};
+}
+
+Vector3 getEntityBonePosition(int index, int bone_index) {
+  Player* pPlayer = getEntityPtr(index);
+  if (isValidPtr(pPlayer)) {
+    if (isValidPtr(pPlayer->pSoldier)) {
+      if (isValidPtr(pPlayer->pSoldier->pRagdoll)) {
+        if (isValidPtr(pPlayer->pSoldier->pRagdoll->pBoneData)) {
+          Vector3 bonePos = (Vector3)*(Vector3*)(pPlayer->pSoldier->pRagdoll->pBoneData + (bone_index * 0x20));
+          return bonePos;
+        }
+      }
+    }
+  }
+
+  return Vector3{};
+}
+
+
+class GameRenderer;
+class RenderView;
+
+class GameRenderer
+{
+public:
+  char pad_0x0000[0x60]; //0x0000
+  RenderView* pRenderView; //0x0060 
+
+}; //Size=0x0068
+
+class RenderView
+{
+public:
+  char pad_0x0000[0xB4]; //0x0000
+  float ClientFovY; //0x00B4 
+  char pad_0x00B8[0x198]; //0x00B8
+  float ClientFovX; //0x0250 
+  char pad_0x0254[0x8C]; //0x0254
+  matrix3x4_t ViewMatrixInverse; //0x02E0 
+  char pad_0x0320[0x100]; //0x0320
+  matrix3x4_t ViewProjection; //0x0420 
+
+}; //Size=0x0460
+
+GameRenderer* cGameRenderer;
+
+matrix3x4_t getViewMatrixInverse() {
+  if (isValidPtr(cGameRenderer)) {
+    if (isValidPtr(cGameRenderer->pRenderView)) {
+      return cGameRenderer->pRenderView->ViewMatrixInverse;
+    }
+  }
+
+  return matrix3x4_t{};
+}
+
+matrix3x4_t getViewProjection() {
+  if (isValidPtr(cGameRenderer)) {
+    if (isValidPtr(cGameRenderer->pRenderView)) {
+      return cGameRenderer->pRenderView->ViewProjection;
+    }
+  }
+
+  return matrix3x4_t{};
+}
+
+float getFovY() {
+  if (isValidPtr(cGameRenderer)) {
+    if (isValidPtr(cGameRenderer->pRenderView)) {
+      return cGameRenderer->pRenderView->ClientFovY;
+    }
+  }
+
+  return 0.0;
 }
