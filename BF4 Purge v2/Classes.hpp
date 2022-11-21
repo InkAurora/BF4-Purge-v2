@@ -4,10 +4,12 @@
 #include "Globals.hpp"
 #include "MemAccess.hpp"
 
+struct Vector2 {
+  float x, y;
+};
+
 struct Vector3 {
-  float x;
-  float y;
-  float z;
+  float x, y, z;
 };
 
 struct Vector4 {
@@ -20,25 +22,27 @@ struct matrix3x4_t {
 
 class ClientGameContext;
 class PlayerManager;
-class LocalPlayer;
 class Soldier;
 class ClientSoldier;
 class VehicleEntity;
 class Position;
+class PlayerArray;
+class Player;
+class Vehicle;
+class Ragdoll;
+class BoneData;
+class Character;
 class Weapon;
 class WeaponData;
 class FiringFunction;
 class BulletEntity;
 class GunSway;
-class PlayerArray;
-class Player;
-class Vehicle;
 class WeaponModifier;
 class Silencer;
 class WeaponZeroing;
 class Modes;
-class Ragdoll;
-class BoneData;
+class SoldierWeapon;
+class WeaponComponent;
 
 class ClientGameContext
 {
@@ -54,28 +58,10 @@ class PlayerManager
 {
 public:
   char pad_0x0000[0x540]; //0x0000
-  LocalPlayer* pLocalPlayer; //0x0540
+  Player* pLocalPlayer; //0x0540
   PlayerArray* pPlayerArray; //0x0548
 
 }; //Size=0x0550
-
-class LocalPlayer
-{
-public:
-  char pad_0x0000[0x13CC]; //0x0000
-  __int32 TeamId; //0x13CC 
-  char pad_0x13D0[0xF0]; //0x13D0
-  VehicleEntity* pVehicleEntity; //0x14C0 
-  char pad_0x14C8[0x8]; //0x14C8
-  Soldier* pSoldier; //0x14D0 
-  char pad_0x14D8[0x100]; //0x14D8
-  __int32 SquadId; //0x15D8 
-  unsigned char IsSquadLeader; //0x15DC 
-  unsigned char IsPrivateSquad; //0x15DD 
-  char pad_0x15DE[0x258]; //0x15DE
-  char LocalPlayerName[16]; //0x89EFE9C0 
-
-}; //Size=0x1846
 
 class Soldier
 {
@@ -92,7 +78,7 @@ public:
   unsigned char SoldierChams; //0x04F4 
   char pad_0x04F5[0x88]; //0x04F5
   Ragdoll* pRagdoll; //0x0580 
-  char pad_0x0588[0x25]; //0x0588
+  char pad_0x0588[0x28]; //0x0588
   unsigned char IsSprinting; //0x05B0 
   unsigned char IsOccluded; //0x05B1 
 
@@ -124,13 +110,198 @@ public:
 
 }; //Size=0x005C
 
+class PlayerArray
+{
+public:
+  Player* pPlayer; //0x0000
+
+}; //Size=0x0008
+
+class Player
+{
+public:
+  char pad_0x0000[0x18]; //0x0000
+  Vehicle* pVehicle; //0x0018 
+  char pad_0x0020[0x13A8]; //0x0020
+  bool IsSpectator; //0x13C9 
+  char pad_0x13CB[0x1]; //0x13CB
+  __int32 TeamId; //0x13CC 
+  char pad_0x13D0[0xE0]; //0x13D0
+  Character* pCharacter; //0x14B0 
+  char pad_0x14B8[0x8]; //0x14B8
+  VehicleEntity* pVehicleEntity; //0x14C0 
+  char pad_0x14C8[0x8]; //0x14C8
+  Soldier* pSoldier; //0x14D0 
+  char pad_0x14D8[0x100]; //0x14D8
+  __int32 SquadId; //0x15D8 
+  unsigned char IsSquadLeader; //0x15DC 
+  unsigned char IsPrivateSquad; //0x15DD 
+  char pad_0x15DE[0x256]; //0x15DE
+  char PlayerName[16]; //0x89EFE9C0 
+
+}; //Size=0x1846
+
+class Ragdoll
+{
+public:
+  char pad_0x0000[0xB0]; //0x0000
+  BoneData* pBoneData; //0x00B0 
+
+}; //Size=0x00B8
+
+class BoneData
+{
+public:
+
+}; //Size=0x0000
+
+class Vehicle
+{
+public:
+  char VehicleName[16]; //0x89EFE9C0
+
+}; //Size=0x0010
+
+ClientGameContext* getClientGameContextPtr() {
+  return (ClientGameContext*)*(DWORD*)(OFFSET_CLIENTGAMECONTEXT);
+}
+
+Player* getPlayerPtr(int index) {
+  ClientGameContext* pClientGameContext = getClientGameContextPtr();
+  if (isValidPtr(pClientGameContext)) {
+    if (isValidPtr(pClientGameContext->pPlayerManager)) {
+      PlayerArray* pPlayerArr = pClientGameContext->pPlayerManager->pPlayerArray;
+      pPlayerArr += index;
+      if (isValidPtr(pPlayerArr)) return pPlayerArr->pPlayer;
+    }
+  }
+
+  return nullptr;
+}
+
+Player* getLocalPlayerPtr() {
+  ClientGameContext* pClientGameContext = getClientGameContextPtr();
+  if (isValidPtr(pClientGameContext)) {
+    if (isValidPtr(pClientGameContext->pPlayerManager)) {
+      return pClientGameContext->pPlayerManager->pLocalPlayer;
+    }
+  }
+
+  return nullptr;
+}
+
+Soldier* getSoldierPtr(int index, bool localP = false) {
+  Player* pPlayer = localP ? getLocalPlayerPtr() : getPlayerPtr(index);
+  if (isValidPtr(pPlayer)) return pPlayer->pSoldier;
+
+  return nullptr;
+}
+
+Vector3 getEntityPos(int index, bool localP = false) {
+  Soldier* pSoldier = getSoldierPtr(index, localP);
+  if (isValidPtr(pSoldier)) {
+    if (isValidPtr(pSoldier->pPosition)) {
+      return pSoldier->pPosition->Coords;
+    }
+  }
+
+  return Vector3{};
+}
+
+Vector3 getEntityBonePosition(int index, int bone_index) {
+  Soldier* pSoldier = getSoldierPtr(index);
+  if (isValidPtr(pSoldier)) {
+    if (isValidPtr(pSoldier->pRagdoll)) {
+      if (isValidPtr(pSoldier->pRagdoll->pBoneData)) {
+        Vector3 bonePos = (Vector3) * (Vector3*)(pSoldier->pRagdoll->pBoneData + (bone_index * 0x20));
+        return bonePos;
+      }
+    }
+  }
+
+  return Vector3{};
+}
+
+Vector3 getEntityVel(int index, bool localP = false) {
+  Soldier* pSoldier = getSoldierPtr(index, localP);
+  if (isValidPtr(pSoldier)) {
+    if (isValidPtr(pSoldier->pPosition)) {
+      return pSoldier->pPosition->Velocity;
+    }
+  }
+
+  return Vector3{};
+}
+
+float getEntityHealth(int index) {
+  Soldier* pSoldier = getSoldierPtr(index);
+  if (isValidPtr(pSoldier)) {
+    if (isValidPtr(pSoldier->pClientSoldier)) {
+      return pSoldier->pClientSoldier->Health;
+    }
+  }
+
+  return 0;
+}
+
+string getEntityName(int index) {
+  Player* pPlayer = getPlayerPtr(index);
+  if (isValidPtr(pPlayer)) return pPlayer->PlayerName;
+
+  return "";
+}
+
+bool isEnemy(int index) {
+  Player* pLocalPlayer = getLocalPlayerPtr();
+  Player* pPlayer = getPlayerPtr(index);
+  if (isValidPtr(pLocalPlayer) and isValidPtr(pPlayer)) {
+    if (pLocalPlayer->TeamId == pPlayer->TeamId) return false;
+    return true;
+  }
+
+  return false;
+}
+
+bool isSquadAlly(int index) {
+  Player* pLocalPlayer = getLocalPlayerPtr();
+  Player* pPlayer = getPlayerPtr(index);
+  if (isValidPtr(pLocalPlayer) and isValidPtr(pPlayer)) {
+    if (pLocalPlayer->TeamId == pPlayer->TeamId) {
+      if (pLocalPlayer->SquadId == pPlayer->SquadId) return true;
+    }
+    return false;
+  }
+
+  return false;
+}
+
+bool isOccluded(int index) {
+  Soldier* pSoldier = getSoldierPtr(index);
+  if (isValidPtr(pSoldier)) {
+    return pSoldier->IsOccluded;
+  }
+
+  return true;
+}
+
+int getEntityPose(int index) {
+  Soldier* pSoldier = getSoldierPtr(index);
+  if (isValidPtr(pSoldier)) return pSoldier->PoseType;
+
+  return 0;
+}
+
+
+
 class Weapon
 {
 public:
   char pad_0x0000[0x128]; //0x0000
   WeaponData* pWeaponData; //0x0128 
+  char pad_0x0130[0xC0]; //0x0130
+  WeaponModifier* pWeaponModifier; //0x01F0 
 
-}; //Size=0x0130
+}; //Size=0x01F8
 
 class WeaponData
 {
@@ -191,54 +362,6 @@ public:
 
 }; //Size=0x0440
 
-class PlayerArray
-{
-public:
-  Player* pPlayer; //0x0000
-
-}; //Size=0x0008
-
-class Player
-{
-public:
-  char pad_0x0000[0x18]; //0x0000
-  Vehicle* pVehicle; //0x0018 
-  char pad_0x0020[0x13AC]; //0x0020
-  __int32 TeamId; //0x13CC 
-  char pad_0x13D0[0xF0]; //0x13D0
-  VehicleEntity* pVehicleEntity; //0x14C0 
-  char pad_0x14C8[0x8]; //0x14C8
-  Soldier* pSoldier; //0x14D0 
-  char pad_0x14D8[0x100]; //0x14D8
-  __int32 SquadId; //0x15D8 
-  unsigned char IsSquadLeader; //0x15DC 
-  unsigned char IsPrivateSquad; //0x15DD 
-  char pad_0x15DE[0x256]; //0x15DE
-  char PlayerName[16]; //0x89EFE9C0 
-
-}; //Size=0x1846
-
-class Ragdoll
-{
-public:
-  char pad_0x0000[0xB0]; //0x0000
-  BoneData* pBoneData; //0x00B0 
-
-}; //Size=0x00B8
-
-class BoneData
-{
-public:
-
-}; //Size=0x0000
-
-class Vehicle
-{
-public:
-  char VehicleName[16]; //0x89EFE9C0
-
-}; //Size=0x0010
-
 class WeaponModifier
 {
 public:
@@ -267,152 +390,139 @@ public:
 
 class Modes
 {
+public: 
+
+}; //Size=0x0000
+
+class SoldierWeapon
+{
 public:
-  Vector3 Zeroing; //0x0000 
+  char pad_0x0000[0x568]; //0x0000
+  WeaponComponent* pWeaponComponent; //0x0568 
 
-}; //Size=0x000C
+}; //Size=0x0570
+
+class WeaponComponent
+{
+public:
+  char pad_0x0000[0xA98]; //0x0000
+  __int32 ActiveSlot; //0x0A98 
+  char pad_0x0A9C[0x2C]; //0x0A9C
+  __int32 ZeroingLevel; //0x0AC8 
+
+}; //Size=0x0ACC
+
+class Character
+{
+public:
+  SoldierWeapon* pSoldierWeapon; //0x0000 
+
+}; //Size=0x0008
 
 
-
-ClientGameContext* cClientGameContext;
-Weapon* cWeapon;
-
-Player* getEntityPtr(int index) {
-  if (isValidPtr(cClientGameContext)) {
-    if (isValidPtr(cClientGameContext->pPlayerManager)) {
-      PlayerArray* pPlayerArr = (PlayerArray*)cClientGameContext->pPlayerManager->pPlayerArray;
-      pPlayerArr += index;
-      if (isValidPtr(pPlayerArr))
-        if (isValidPtr(pPlayerArr->pPlayer)) {
-          return pPlayerArr->pPlayer;
-        }
-    }
-  }
-
-  return nullptr;
-}
-
-Player* getLocalPlayerPtr() {
-  if (isValidPtr(cClientGameContext)) {
-    if (isValidPtr(cClientGameContext->pPlayerManager)) {
-      PlayerArray* pLocalP = (PlayerArray*)cClientGameContext->pPlayerManager->pLocalPlayer;
-      if (isValidPtr(pLocalP))
-        if (isValidPtr(pLocalP->pPlayer)) {
-          return pLocalP->pPlayer;
-        }
-    }
-  }
-
-  return nullptr;
-}
-
-Vector3 getEntityPos(int index) {
-  Player* pPlayer = getEntityPtr(index);
-  if (isValidPtr(pPlayer)) {
-    if (isValidPtr(pPlayer->pSoldier)) {
-      if (isValidPtr(pPlayer->pSoldier->pPosition)) {
-        return pPlayer->pSoldier->pPosition->Coords;
-      }
-    }
-  }
-
-  return Vector3{ 0, 0, 0 };
-}
-
-Vector3 getEntityVel(int index) {
-  Player* pPlayer = getEntityPtr(index);
-  if (isValidPtr(pPlayer)) {
-    if (isValidPtr(pPlayer->pSoldier)) {
-      if (isValidPtr(pPlayer->pSoldier->pPosition)) {
-        return pPlayer->pSoldier->pPosition->Velocity;
-      }
-    }
-  }
-
-  return Vector3{ 0, 0, 0 };
-}
-
-float getEntityHealth(int index) {
-  Player* pPlayer = getEntityPtr(index);
-  if (isValidPtr(pPlayer)) {
-    if (isValidPtr(pPlayer->pSoldier)) {
-      if (isValidPtr(pPlayer->pSoldier->pClientSoldier)) {
-        return pPlayer->pSoldier->pClientSoldier->Health;
-      }
-    }
-  }
-
-  return 0.0;
-}
-
-string getEntityName(int index) {
-  Player* pPlayer = getEntityPtr(index);
-  if (isValidPtr(pPlayer)) return pPlayer->PlayerName;
-
-  return "";
-}
-
-bool isEnemy(int index) {
-  Player* pLocalPlayer = getLocalPlayerPtr();
-  Player* pPlayer = getEntityPtr(index);
-  if (isValidPtr(pLocalPlayer) and isValidPtr(pPlayer)) {
-    if (pLocalPlayer->TeamId == pPlayer->TeamId) return false;
-    return true;
-  }
-
-  return false;
-}
-
-bool isSquadAlly(int index) {
-  Player* pLocalPlayer = getLocalPlayerPtr();
-  Player* pPlayer = getEntityPtr(index);
-  if (isValidPtr(pLocalPlayer) and isValidPtr(pPlayer)) {
-    if (pLocalPlayer->TeamId == pPlayer->TeamId) {
-      if (pLocalPlayer->SquadId == pPlayer->SquadId) return true;
-    }
-    return false;
-  }
-
-  return false;
+Weapon* getWeaponPtr() {
+  return (Weapon*)*(DWORD*)(OFFSET_WEAPON);
 }
 
 WeaponData* getWeaponData() {
-  if (isValidPtr(cWeapon)) {
-    if (isValidPtr(cWeapon->pWeaponData)) {
-      return cWeapon->pWeaponData;
-    }
+  Weapon* pWeapon = getWeaponPtr();
+  if (isValidPtr(pWeapon)) {
+    return pWeapon->pWeaponData;
   }
+
+  return nullptr;
+}
+
+FiringFunction* getFiringFunction() {
+  WeaponData* pWeaponData = getWeaponData();
+  if (isValidPtr(pWeaponData)) {
+    return pWeaponData->pFiringFunction;
+  }
+
+  return nullptr;
+}
+
+BulletEntity* getBulletEntity() {
+  FiringFunction* pFiringFunction = getFiringFunction();
+  if (isValidPtr(pFiringFunction)) {
+    return pFiringFunction->pBulletEntity;
+  }
+
+  return nullptr;
+}
+
+WeaponModifier* getWeaponModifier() {
+  Weapon* pWeapon = getWeaponPtr();
+  if (isValidPtr(pWeapon)) return pWeapon->pWeaponModifier;
+
+  return nullptr;
+}
+
+Silencer* getWeaponSilencer() {
+  WeaponModifier* pWeaponModifier = getWeaponModifier();
+  if (isValidPtr(pWeaponModifier)) return pWeaponModifier->pSilencer;
 
   return nullptr;
 }
 
 Vector3 getWeaponOffset() {
-  if (isValidPtr(cWeapon)) {
-    if (isValidPtr(cWeapon->pWeaponData)) {
-      if (isValidPtr(cWeapon->pWeaponData->pFiringFunction)) {
-        return cWeapon->pWeaponData->pFiringFunction->Offset;
-      }
-    }
+  FiringFunction* pFiringFunction = getFiringFunction();
+  if (isValidPtr(pFiringFunction)) {
+    return pFiringFunction->Offset;
   }
 
   return Vector3{};
 }
 
-Vector3 getEntityBonePosition(int index, int bone_index) {
-  Player* pPlayer = getEntityPtr(index);
+Vector3 getWeaponVel() {
+  FiringFunction* pFiringFunction = getFiringFunction();
+  if (isValidPtr(pFiringFunction)) {
+    return pFiringFunction->Velocity;
+  }
+
+  return Vector3{};
+}
+
+float getWeaponGravity() {
+  BulletEntity* pBulletEntity = getBulletEntity();
+  if (isValidPtr(pBulletEntity)) {
+    return pBulletEntity->Gravity;
+  }
+
+  return 0;
+}
+
+int getWeaponZeroingLevel() {
+  Player* pPlayer = getLocalPlayerPtr();
   if (isValidPtr(pPlayer)) {
-    if (isValidPtr(pPlayer->pSoldier)) {
-      if (isValidPtr(pPlayer->pSoldier->pRagdoll)) {
-        if (isValidPtr(pPlayer->pSoldier->pRagdoll->pBoneData)) {
-          Vector3 bonePos = (Vector3)*(Vector3*)(pPlayer->pSoldier->pRagdoll->pBoneData + (bone_index * 0x20));
-          return bonePos;
+    if (isValidPtr(pPlayer->pCharacter)) {
+      if (isValidPtr(pPlayer->pCharacter->pSoldierWeapon)) {
+        if (isValidPtr(pPlayer->pCharacter->pSoldierWeapon->pWeaponComponent)) {
+          return pPlayer->pCharacter->pSoldierWeapon->pWeaponComponent->ZeroingLevel;
         }
       }
     }
   }
 
-  return Vector3{};
+  return -1;
 }
+
+Vector2 getWeaponZeroing() {
+  int ZeroingLevel = getWeaponZeroingLevel();
+  if (ZeroingLevel == -1) return Vector2{ 0, 0 };
+  WeaponModifier* pWeaponModifier = getWeaponModifier();
+  if (isValidPtr(pWeaponModifier)) {
+    if (isValidPtr(pWeaponModifier->pWeaponZeroing)) {
+      if (isValidPtr(pWeaponModifier->pWeaponZeroing->pModes)) {
+        Vector2 Zeroing = (Vector2)*(Vector2*)(pWeaponModifier->pWeaponZeroing->pModes + (ZeroingLevel * 0x8));
+        return Zeroing;
+      }
+    }
+  }
+
+  return Vector2{};
+}
+
 
 
 class GameRenderer;
@@ -440,34 +550,44 @@ public:
 
 }; //Size=0x0460
 
-GameRenderer* cGameRenderer;
+
+GameRenderer* getGameRendererPtr() {
+  return (GameRenderer*)*(DWORD*)(OFFSET_GAMERENDERER);
+
+}
+
+RenderView* getRenderView() {
+  GameRenderer* pGameRenderer = getGameRendererPtr();
+  if (isValidPtr(pGameRenderer)) {
+    return pGameRenderer->pRenderView;
+  }
+
+  return nullptr;
+}
 
 matrix3x4_t getViewMatrixInverse() {
-  if (isValidPtr(cGameRenderer)) {
-    if (isValidPtr(cGameRenderer->pRenderView)) {
-      return cGameRenderer->pRenderView->ViewMatrixInverse;
-    }
+  RenderView* pRenderView = getRenderView();
+  if (isValidPtr(pRenderView)) {
+    return pRenderView->ViewMatrixInverse;
   }
 
   return matrix3x4_t{};
 }
 
 matrix3x4_t getViewProjection() {
-  if (isValidPtr(cGameRenderer)) {
-    if (isValidPtr(cGameRenderer->pRenderView)) {
-      return cGameRenderer->pRenderView->ViewProjection;
-    }
+  RenderView* pRenderView = getRenderView();
+  if (isValidPtr(pRenderView)) {
+      return pRenderView->ViewProjection;
   }
 
   return matrix3x4_t{};
 }
 
 float getFovY() {
-  if (isValidPtr(cGameRenderer)) {
-    if (isValidPtr(cGameRenderer->pRenderView)) {
-      return cGameRenderer->pRenderView->ClientFovY;
-    }
+  RenderView* pRenderView = getRenderView();
+  if (isValidPtr(pRenderView)) {
+    return pRenderView->ClientFovY;
   }
 
-  return 0.0;
+  return 0;
 }

@@ -16,17 +16,6 @@ bool threadRunningOK = true;
 // -----------------------------------------------------------------
 // -----------------------------------------------------------------
 
-void loadGameContext() {
-  moduleBase = (DWORD64)GetModuleHandle(NULL);
-  while (true) {
-    cClientGameContext = (ClientGameContext*)*(DWORD*)(OFFSET_CLIENTGAMECONTEXT);
-    cWeapon = (Weapon*)*(DWORD*)(OFFSET_WEAPON);
-    cGameRenderer = (GameRenderer*)*(DWORD*)(OFFSET_GAMERENDERER);
-    if (isValidPtr(&cClientGameContext) and isValidPtr(cWeapon) and isValidPtr(cGameRenderer)) return;
-    Sleep(500);
-  }
-}
-
 DWORD __stdcall EjectThread(LPVOID lpParameter) {
   Sleep(100);
   FreeLibraryAndExitThread(DLLHandle, 0);
@@ -35,6 +24,9 @@ DWORD __stdcall EjectThread(LPVOID lpParameter) {
 }
 
 void detach() {
+  ENABLE_AIMBOT = false;
+
+  Sleep(100);
 
   if (!ShutdownVisuals()) {
     Sleep(100);
@@ -51,17 +43,19 @@ int WINAPI Main(HMODULE hModule) {
     threadRunningOK = false;
   }
 
-  loadGameContext();
-
-  Player* pPlayer;
+  CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)EnableAimbot, NULL, NULL, NULL);
 
   while (threadRunningOK) {
     Sleep(50);
-    testText = "abc";
+    testText = to_string(BONE_INDEX);
 	if (GetAsyncKeyState(VK_INSERT) & 1) {
       show_menu = !show_menu;
 	  while (GetAsyncKeyState(VK_NUMPAD1) & 1) {}
 	}
+    if (GetAsyncKeyState(VK_LMENU) & 1) {
+      BONE_INDEX++;
+      while (GetAsyncKeyState(VK_LMENU) & 1) {}
+    }
 	if (GetAsyncKeyState(VK_END) & 1) {
 	  break;
 	}

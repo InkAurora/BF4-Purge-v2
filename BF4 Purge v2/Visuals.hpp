@@ -60,10 +60,6 @@ LRESULT __stdcall WndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
   return CallWindowProc(oWndProc, hWnd, uMsg, wParam, lParam);
 }
 
-bool show_menu = true;
-bool show_ESP = false;
-bool show_ESP_allies = true;
-
 string testText = "";
 
 bool init = false;
@@ -71,28 +67,6 @@ HWND window = NULL;
 ID3D11Device* p_device = NULL;
 ID3D11DeviceContext* p_context = NULL;
 ID3D11RenderTargetView* mainRenderTargetView = NULL;
-
-vector<entityESP> renderList;
-
-ImU32 SQUADALLY_ESP_COLOR = IM_COL32(100, 255, 100, 255);
-ImU32 ALLY_ESP_COLOR = IM_COL32(0, 100, 255, 255);
-ImU32 ENEMY_ESP_COLOR = IM_COL32(255, 100, 0, 255);
-
-int gmp(entityESP entity) {
-  return lround((entity.x + entity.headX) / 2);
-}
-
-vector<ImVec2> getRectPos(entityESP entity) {
-  int width = 300;
-  
-  ImVec2 p0, p1;
-
-  width = width * entity.scaleX;
-  p0 = ImVec2(gmp(entity) - (width / 2), entity.headY - ((entity.y - entity.headY) / 10));
-  p1 = ImVec2(gmp(entity) + (width / 2), entity.y + ((entity.y - entity.headY) / 10));
-
-  return { p0, p1 };
-}
 
 static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_interval, UINT flags) {
   if (!init) {
@@ -130,6 +104,7 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 	ImGui::Text("Options:");
 	ImGui::Checkbox("Enable ESP", &show_ESP);
 	ImGui::Checkbox("ESP Allies", &show_ESP_allies);
+	ImGui::Checkbox("Aimbot", &ENABLE_AIMBOT);
 	ImGui::Text(testText.c_str());
 	ImGui::End();
   }
@@ -145,26 +120,12 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 	ImGui::SetWindowPos(ImVec2(0, 0), ImGuiCond_Always);
 	ImGui::SetWindowSize(ImVec2(io.DisplaySize.x, io.DisplaySize.y), ImGuiCond_Always);
 
-	PopulateESP();
-
-	renderList = DrawList;
+	PopulateEntities();
 
 	ImGuiWindow* window = ImGui::GetCurrentWindow();
 	ImDrawList* draw_list = window->DrawList;
 
-	for (entityESP entity : renderList) {
-	  if (!show_ESP_allies and !entity.isEnemy) continue;
-	  vector<ImVec2> rectPos = getRectPos(entity);
-	  if (entity.isEnemy) draw_list->AddRect(rectPos[0], rectPos[1], ENEMY_ESP_COLOR);
-	  else if (entity.isSquadAlly) draw_list->AddRect(rectPos[0], rectPos[1], SQUADALLY_ESP_COLOR);
-	  else draw_list->AddRect(rectPos[0], rectPos[1], ALLY_ESP_COLOR);
-
-	  string distanceStr = to_string(lround(entity.distance)) + "m";
-	  draw_list->AddText(ImVec2(gmp(entity), rectPos[1].y + 5), 0xFFFFFFFF, distanceStr.c_str());
-
-	  string healthStr = "HP " + to_string(lround(entity.health));
-	  draw_list->AddText(ImVec2(gmp(entity), rectPos[0].y - 15), 0xFFFFFFFF, healthStr.c_str());
-	}
+	DrawESP(draw_list);
 
 	window->DrawList->PushClipRectFullScreen();
 	ImGui::End();
